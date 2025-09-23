@@ -1,0 +1,250 @@
+[
+    {
+        "value": "five_whys_diagram",
+        "label": "5 Whys Diagram"
+    },
+    {
+        "value": "a3_problem_solving_report",
+        "label": "A3 Problem Solving Report"
+    },
+    {
+        "value": "action_plan_table",
+        "label": "Action Plan Table"
+    },
+    {
+        "value": "affinity_diagram",
+        "label": "Affinity Diagram"
+    },
+    {
+        "value": "audit_checklist",
+        "label": "Audit Checklist"
+    },
+    {
+        "value": "balanced_scorecard",
+        "label": "Balanced Scorecard"
+    },
+    {
+        "value": "before_and_after_flowchart",
+        "label": "Before-and-After Flowchart"
+    },
+    {
+        "value": "box_plot",
+        "label": "Box Plot"
+    },
+    {
+        "value": "brainstorming_diagram_mind_map",
+        "label": "Brainstorming Diagram (Mind Map)"
+    },
+    {
+        "value": "cause_and_effect_diagram_fishbone_ishikawa",
+        "label": "Cause & Effect Diagram (Fishbone/Ishikawa)"
+    },
+    {
+        "value": "check_sheet",
+        "label": "Check Sheet"
+    },
+    {
+        "value": "communication_plan",
+        "label": "Communication Plan"
+    },
+    {
+        "value": "control_chart_x_r_p_np_c_u",
+        "label": "Control Chart (X̄-R, p, np, c, u)"
+    },
+    {
+        "value": "control_plan",
+        "label": "Control Plan"
+    },
+    {
+        "value": "control_impact_matrix",
+        "label": "Control-Impact Matrix"
+    },
+    {
+        "value": "correlation_matrix",
+        "label": "Correlation Matrix"
+    },
+    {
+        "value": "ctq_tree_critical_to_quality",
+        "label": "CTQ Tree (Critical to Quality)"
+    },
+    {
+        "value": "dashboards_kpi_tracking",
+        "label": "Dashboards (KPI Tracking)"
+    },
+    {
+        "value": "data_collection_plan",
+        "label": "Data Collection Plan"
+    },
+    {
+        "value": "decision_matrix_pugh_matrix",
+        "label": "Decision Matrix (Pugh Matrix)"
+    },
+    {
+        "value": "design_of_experiments_doe_layout",
+        "label": "Design of Experiments (DOE) Layout"
+    },
+    {
+        "value": "dot_plot",
+        "label": "Dot Plot"
+    },
+    {
+        "value": "failure_modes_and_effects_analysis_fmea",
+        "label": "Failure Modes and Effects Analysis (FMEA)"
+    },
+    {
+        "value": "fishbone_diagram_ishikawa",
+        "label": "Fishbone Diagram (Ishikawa)"
+    },
+    {
+        "value": "force_field_analysis",
+        "label": "Force Field Analysis"
+    },
+    {
+        "value": "future_state_value_stream_map",
+        "label": "Future State Value Stream Map"
+    },
+    {
+        "value": "gage_randr_study",
+        "label": "Gage R&R Study"
+    },
+    {
+        "value": "gantt_chart",
+        "label": "Gantt Chart"
+    },
+    {
+        "value": "heat_map",
+        "label": "Heat Map"
+    },
+    {
+        "value": "high_level_process_map",
+        "label": "High-Level Process Map"
+    },
+    {
+        "value": "histogram",
+        "label": "Histogram"
+    },
+    {
+        "value": "hypothesis_testing_table",
+        "label": "Hypothesis Testing Table"
+    },
+    {
+        "value": "kaizen_board",
+        "label": "Kaizen Board"
+    },
+    {
+        "value": "measurement_system_analysis_msa",
+        "label": "Measurement System Analysis (MSA)"
+    },
+    {
+        "value": "mistake_proofing_diagram_poka_yoke",
+        "label": "Mistake Proofing Diagram (Poka-Yoke)"
+    },
+    {
+        "value": "monte_carlo_simulation",
+        "label": "Monte Carlo Simulation"
+    },
+    {
+        "value": "operational_definitions_table",
+        "label": "Operational Definitions Table"
+    },
+    {
+        "value": "pareto_chart",
+        "label": "Pareto Chart"
+    },
+    {
+        "value": "pdca_cycle_plan_do_check_act",
+        "label": "PDCA Cycle (Plan-Do-Check-Act)"
+    },
+    {
+        "value": "pilot_implementation_plan",
+        "label": "Pilot Implementation Plan"
+    },
+    {
+        "value": "process_capability_analysis_cp_cpk",
+        "label": "Process Capability Analysis (Cp, Cpk)"
+    },
+    {
+        "value": "process_flowchart",
+        "label": "Process Flowchart"
+    },
+    {
+        "value": "project_charter",
+        "label": "Project Charter"
+    },
+    {
+        "value": "radar_chart_spider_chart",
+        "label": "Radar Chart (Spider Chart)"
+    },
+    {
+        "value": "raci_matrix",
+        "label": "RACI Matrix"
+    },
+    {
+        "value": "regression_output",
+        "label": "Regression Output"
+    },
+    {
+        "value": "response_plan_template",
+        "label": "Response Plan Template"
+    },
+    {
+        "value": "root_cause_analysis_rca_tree",
+        "label": "Root Cause Analysis (RCA) Tree"
+    },
+    {
+        "value": "run_chart",
+        "label": "Run Chart"
+    },
+    {
+        "value": "scatter_plot",
+        "label": "Scatter Plot"
+    },
+    {
+        "value": "sipoc_diagram",
+        "label": "SIPOC Diagram"
+    },
+    {
+        "value": "solution_selection_matrix",
+        "label": "Solution Selection Matrix"
+    },
+    {
+        "value": "spider_chart",
+        "label": "Spider Chart"
+    },
+    {
+        "value": "stakeholder_analysis_matrix",
+        "label": "Stakeholder Analysis Matrix"
+    },
+    {
+        "value": "standard_operating_procedure_sop",
+        "label": "Standard Operating Procedure (SOP)"
+    },
+    {
+        "value": "stratification_diagram",
+        "label": "Stratification Diagram"
+    },
+    {
+        "value": "swimlane_diagram",
+        "label": "Swimlane Diagram"
+    },
+    {
+        "value": "time_series_plot",
+        "label": "Time Series Plot"
+    },
+    {
+        "value": "tree_diagram",
+        "label": "Tree Diagram"
+    },
+    {
+        "value": "value_stream_map_vsm",
+        "label": "Value Stream Map (VSM)"
+    },
+    {
+        "value": "voice_of_customer_voc_table",
+        "label": "Voice of Customer (VoC) Table"
+    },
+    {
+        "value": "visual_management_board",
+        "label": "Visual Management Board"
+    }
+]
