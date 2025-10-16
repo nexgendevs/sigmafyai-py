@@ -18,11 +18,13 @@ from pdf2image import convert_from_bytes
 from PyPDF2 import PdfReader
 
 # Configure logging
+from logging.handlers import RotatingFileHandler
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler()  # Output to console
+        logging.StreamHandler(),  # Output to console
+        RotatingFileHandler('python.log', maxBytes=10*1024*1024, backupCount=5)  # 10MB file, keep 5 backups
     ]
 )
 logger = logging.getLogger('sigmafyai')
@@ -74,7 +76,6 @@ def upload_image_to_imgbb(image_data, filename):
             result = response.json()
             if result.get('success'):
                 hosted_url = result['data']['url']
-                logger.info(f"✓ Image successfully uploaded to ImgBB: {hosted_url}")
                 return hosted_url, None
             else:
                 return None, f"Upload failed: {result.get('error', {}).get('message', 'Unknown error')}"
@@ -108,10 +109,6 @@ def upload_image_to_temp_storage(image_data, filename):
     if hosted_url:
         return hosted_url, None
     
-    # Log why imgbb failed
-    logger.warning(f"⚠ ImgBB upload failed: {error}")
-    logger.info("📝 Falling back to base64 data URL...")
-    
     # Fall back to base64 data URL (works directly with OpenAI API)
     try:
         import base64
@@ -134,17 +131,15 @@ def upload_image_to_temp_storage(image_data, filename):
         else:
             # Always default to PNG for OpenAI Vision API compatibility
             mime_type = 'image/png'
-            logger.warning(f"⚠ Converting image to PNG format for OpenAI Vision API compatibility")
-        
+
         # Create base64 data URL
         image_b64 = base64.b64encode(image_data).decode('utf-8')
         data_url = f"data:{mime_type};base64,{image_b64}"
-        
+
         # Validate the data URL format
         if not data_url.startswith('data:image/'):
             return None, "Invalid data URL format generated"
-        
-        logger.info(f"✓ Created base64 data URL ({len(data_url)} characters, {mime_type})")
+
         return data_url, None
         
     except Exception as e:
@@ -236,28 +231,19 @@ def preprocess_google_drive_url_v2(url):
     """
     # TODO: remove unnecessary keyword
     try:
-        logger.info(f"Processing URL: {url}")
-        
         if "docs.google.com/spreadsheets" in url:
             # Handle Google Sheets URLs
             if "/d/" in url:
                 file_id = url.split("/d/")[1].split("/")[0]
-                processed_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv"
-                logger.info(f"Converted Google Sheets URL to: {processed_url}")
-                return processed_url
+                return f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=csv"
         elif "drive.google.com" in url:
             # Handle Google Drive file URLs
             if "/file/d/" in url:
                 file_id = url.split("/file/d/")[1].split("/")[0]
-                # Use direct file URL that works better with external APIs
-                processed_url = f"https://drive.google.com/file/d/{file_id}/preview"
-                logger.info(f"Converted Google Drive URL to preview URL: {processed_url}")
-                return processed_url
+                return f"https://drive.google.com/file/d/{file_id}/preview"
             elif "id=" in url:
                 file_id = url.split("id=")[1].split("&")[0]
-                processed_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                logger.info(f"Converted Google Drive URL to: {processed_url}")
-                return processed_url
+                return f"https://drive.google.com/uc?export=download&id={file_id}"
         
         # If no conversion was done, return the original URL
         return url
@@ -434,7 +420,12 @@ IMPORTANT: Return ONLY the Python code, nothing else. Do not include explanation
     - DO NOT use deprecated styles like 'seaborn-whitegrid', 'seaborn-darkgrid', etc.
     - Use modern matplotlib styles: 'default', 'classic', 'Solarize_Light2', 'bmh', 'fivethirtyeight', 'ggplot', 'grayscale', 'dark_background', etc.
     - If you need seaborn-like styling, manually set parameters instead of using seaborn styles.
-    - Example of manual grid styling: plt.grid(True, alpha=0.3, linestyle='--')"""
+    - Example of manual grid styling: plt.grid(True, alpha=0.3, linestyle='--')
+
+    MATPLOTLIB TABLE REQUIREMENTS (Important for matplotlib 3.10+):
+    - DO NOT use 'fontsize' parameter in table.add_cell()
+    - Instead use: cell = table.add_cell(...); cell.set_text_props(fontsize=10)
+    - This avoids: TypeError: Cell.__init__() got an unexpected keyword argument 'fontsize'"""
 
     client = OpenAI(api_key=OPENAI_API_KEY, timeout=60.0)
     user_content = user_prompt_text
@@ -474,9 +465,6 @@ IMPORTANT: Return ONLY the Python code, nothing else. Do not include explanation
             'completion_tokens': response.usage.completion_tokens,
             'total_tokens': response.usage.total_tokens
         }
-        logger.info(f"📊 Token usage - Prompt: {token_usage['prompt_tokens']}, "
-                   f"Completion: {token_usage['completion_tokens']}, "
-                   f"Total: {token_usage['total_tokens']}")
 
     return python_code, token_usage
 
@@ -496,49 +484,35 @@ def detect_pdf_from_url(url, file_extension):
         # Make a HEAD request to check content-type without downloading the full file
         head_response = requests.head(url, timeout=10, allow_redirects=True)
         content_type = head_response.headers.get('content-type', '').lower()
-        
-        logger.info(f"Content-Type from HEAD request: {content_type}")
-        
+
         # Check if it's a PDF based on content-type
         if 'application/pdf' in content_type or 'pdf' in content_type:
-            logger.info("Detected PDF file based on content-type")
             return True
         # Google Drive often returns 'application/octet-stream' for PDFs, so we need to check file magic bytes
         elif content_type == 'application/octet-stream' or 'octet-stream' in content_type:
-            logger.info("Content-type is octet-stream, checking file magic bytes...")
             # Download first few bytes to check PDF magic signature
             try:
-                headers = {'Range': 'bytes=0-7'}  # Get first 8 bytes
+                headers = {'Range': 'bytes=0-7'}
                 partial_response = requests.get(url, headers=headers, timeout=10)
                 file_header = partial_response.content
-                
-                # PDF files start with '%PDF' (hex: 25 50 44 46)
+
+                # PDF files start with '%PDF'
                 if file_header.startswith(b'%PDF'):
-                    logger.info("Detected PDF file based on magic bytes")
                     return True
-                else:
-                    logger.info(f"File magic bytes: {file_header.hex()[:16]} - not a PDF")
-            except Exception as magic_error:
-                logger.warning(f"Could not check magic bytes: {str(magic_error)}")
+            except Exception:
                 # Fallback to file extension check
                 if file_extension == 'pdf' or '.pdf' in url.lower():
-                    logger.info("Detected PDF file based on file extension fallback")
                     return True
         # Also check file extension as fallback
         elif file_extension == 'pdf' or '.pdf' in url.lower():
-            logger.info("Detected PDF file based on file extension")
             return True
         else:
-            logger.info(f"File detected as non-PDF (content-type: {content_type})")
             return False
                 
     except Exception as e:
-        logger.warning(f"Could not determine file type via HEAD request: {str(e)}")
+        logger.error(f"File type detection failed: {str(e)}")
         # Fallback to URL-based detection
-        url_lower = url.lower()
-        is_pdf = ('.pdf' in url_lower or file_extension == 'pdf')
-        logger.info(f"Using fallback URL-based detection: is_pdf={is_pdf}")
-        return is_pdf
+        return '.pdf' in url.lower() or file_extension == 'pdf'
 
 
 def add_img_base64_snippet(code):
@@ -596,9 +570,6 @@ def analyze_document_with_vision(file_url, question_title, question_content, app
         # Enable detailed logging for OpenAI API requests
         logging.getLogger("httpx").setLevel(logging.DEBUG)
         
-        # Log the input parameters for debugging
-        logger.info(f"Analyzing document: {file_url}")
-        logger.info(f"Question title: {question_title[:50]}..." if len(question_title) > 50 else f"Question title: {question_title}")
 
         # System prompt for Six Sigma expert
         system_prompt = """You are a Six Sigma expert with extensive experience in process improvement, quality management, and statistical analysis. You specialize in evaluating delegate submissions for Six Sigma projects and certifications.
@@ -655,40 +626,16 @@ APPROVAL_CRITERIA:
                 response_file = requests.get(processed_url)
                 file_content = response_file.content
 
-                # Log file content details
-                logger.info(f"Downloaded file content size: {len(file_content)} bytes")
-                
                 # Extract text from PDF
-                logger.info("Extracting text from PDF...")
                 extracted_text, text_error = extract_text_from_pdf(file_content)
                 if text_error:
-                    logger.warning(f"Text extraction error: {text_error}")
-                else:
-                    logger.info(f"Successfully extracted {len(extracted_text)} characters of text")
-                
+                    logger.error(f"PDF text extraction failed: {text_error}")
+
                 # Convert PDF to images for visual analysis
-                logger.info("Converting PDF to images...")
                 pdf_images, conversion_error = convert_pdf_to_images(file_content)
-                
-                # Log image processing results
-                if pdf_images and not conversion_error:
-                    hosted_count = sum(1 for ref in pdf_images if ref.startswith('http'))
-                    base64_count = len(pdf_images) - hosted_count
-                    logger.info(f"✓ PDF converted to {len(pdf_images)} image references")
-                    if hosted_count > 0:
-                        logger.info(f"  - {hosted_count} images uploaded to temporary hosting service")
-                    if base64_count > 0:
-                        logger.info(f"  - {base64_count} images converted to base64 data URLs")
-                    
-                    # Log details of the first image reference for debugging
-                    if pdf_images:
-                        first_ref = pdf_images[0]
-                        if first_ref.startswith('http'):
-                            logger.info(f"First image URL: {first_ref[:100]}...")
-                        else:
-                            logger.info(f"First image is a base64 data URL of length {len(first_ref)} starting with: {first_ref[:50]}...")
-                elif conversion_error:
-                    logger.error(f"⚠ Image conversion failed: {conversion_error}")
+
+                if conversion_error:
+                    logger.error(f"PDF image conversion failed: {conversion_error}")
 
                 # Prepare content for analysis
                 analysis_content = []
@@ -714,42 +661,19 @@ APPROVAL_CRITERIA:
                     # Add all pages for visual analysis (limit to first 3 pages to avoid token limits)
                     max_pages = min(3, len(pdf_images))
                     for i in range(max_pages):
-                        # Handle both regular URLs and base64 data URLs
                         image_ref = pdf_images[i]
-                        logger.info(f"Processing image {i+1} of {max_pages}")
-                        
+
                         # Validate image URL before adding to content
                         if image_ref.startswith('http') or image_ref.startswith('data:image/'):
-                            # Log the image reference type for debugging
-                            if image_ref.startswith('http'):
-                                logger.info(f"Using hosted image URL (page {i+1}): {image_ref[:100]}...")
-                                
-                                # Test URL accessibility
-                                try:
-                                    import requests
-                                    head_response = requests.head(image_ref, timeout=5)
-                                    logger.info(f"URL status code: {head_response.status_code}")
-                                    if head_response.status_code >= 400:
-                                        logger.warning(f"Image URL may not be accessible (status code {head_response.status_code})")
-                                except Exception as e:
-                                    logger.warning(f"Failed to check image URL: {str(e)}")
-                            else:
-                                mime_type = image_ref.split(';')[0] if ';' in image_ref else 'unknown'
-                                logger.info(f"Using base64 data URL (page {i+1}), MIME type: {mime_type}, length: {len(image_ref)}")
-                                
                             # Ensure data URLs are properly formatted for OpenAI
                             if image_ref.startswith('data:'):
-                                # Verify it's one of the supported formats
                                 supported_formats = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
                                 format_found = next((fmt for fmt in supported_formats if fmt in image_ref), None)
-                                
+
                                 if not format_found:
-                                    logger.warning(f"Unsupported image format in data URL (page {i+1})")
+                                    logger.warning(f"Unsupported image format (page {i+1})")
                                     continue
-                                else:
-                                    logger.info(f"Confirmed supported format: {format_found}")
-                            
-                            logger.info("Adding image to analysis content")
+
                             analysis_content.append({
                                 "type": "image_url",
                                 "image_url": {
@@ -757,7 +681,7 @@ APPROVAL_CRITERIA:
                                 }
                             })
                         else:
-                            logger.warning(f"Invalid image reference format: {image_ref[:30]}... (skipping)")
+                            logger.error(f"Invalid image format (page {i+1})")
                 else:
                     main_text += "Please analyze the extracted text above for evaluation."
                     analysis_content.append({
@@ -787,11 +711,7 @@ APPROVAL_CRITERIA:
         else:
             # Use the existing preprocess_google_drive_url function for URL processing
             processed_url = preprocess_google_drive_url(file_url)
-            
-            # Determine if the URL points to a PDF by checking content-type
-            logger.info(f"Checking file type for URL: {processed_url}")
-            is_pdf_url = False
-            
+
             is_pdf_url = detect_pdf_from_url(processed_url, file_extension)
             
             if is_pdf_url:
