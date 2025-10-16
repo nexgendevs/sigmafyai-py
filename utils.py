@@ -3,6 +3,7 @@ import io
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import json
@@ -278,8 +279,27 @@ def load_csv_robust(csv_input):
             csv_input.seek(0)  # Reset file pointer
             df = pd.read_csv(csv_input, on_bad_lines='skip', quoting=1, skipinitialspace=True)
     else:  # URL string
+        print(f"🔍 Original CSV URL: {csv_input}")
+
         # Preprocess Google Drive URLs
         processed_url = preprocess_google_drive_url(csv_input)
+        print(f"🔄 Processed CSV URL: {processed_url}")
+
+        # Test URL accessibility first
+        try:
+            import requests
+            print(f"🌐 Testing URL accessibility...")
+            test_response = requests.head(processed_url, timeout=10, verify=False)
+            print(f"✅ URL accessible. Status: {test_response.status_code}")
+        except Exception as test_error:
+            print(f"❌ URL not accessible: {str(test_error)}")
+            # Try without HTTPS verification
+            try:
+                print(f"🔄 Retrying without SSL verification...")
+                test_response = requests.head(processed_url, timeout=10, verify=False)
+                print(f"✅ URL accessible without SSL verification. Status: {test_response.status_code}")
+            except Exception as ssl_error:
+                print(f"❌ Still not accessible: {str(ssl_error)}")
 
         # Try multiple parsing strategies
         strategies = [
@@ -296,17 +316,26 @@ def load_csv_robust(csv_input):
         df = None
         for i, strategy in enumerate(strategies, 1):
             try:
-                df = pd.read_csv(processed_url, **strategy)
+                print(f"📋 Trying CSV strategy {i}...")
+                # Add timeout to requests session for pandas
+                import requests
+                session = requests.Session()
+                session.timeout = 30
+                df = pd.read_csv(processed_url, storage_options={'timeout': 30, 'verify': False}, **strategy)
+                print(f"✅ Strategy {i} successful!")
                 break
             except Exception as e:
+                print(f"❌ Strategy {i} failed: {str(e)}")
                 # Continue to next strategy
                 continue
 
         # If all strategies fail, try manual preprocessing
         if df is None:
             try:
-                response = requests.get(processed_url)
+                print(f"🔄 Trying manual preprocessing for URL: {processed_url}")
+                response = requests.get(processed_url, timeout=30)
                 content = response.text
+                print(f"✅ Manual download completed. Content length: {len(content)}")
 
                 # Clean up the content
                 lines = content.split('\n')
@@ -380,40 +409,76 @@ def extract_text_from_pdf(pdf_content):
         return None, str(e)
 
 
-def generate_graph_with_llm(data, graph_type):
+def generate_graph_with_llm(data, graph_type, custom_prompt=''):
     csv_data = data.to_csv(index=False)
 
-    system_prompt = "You are a data visualization expert. You generate syntactically correct Python code."
-    user_prompt = f"""Create a {graph_type} using matplotlib for the following data:
-    {csv_data}
+    system_prompt = """You are a data visualization expert. You generate syntactically correct, well-structured Python code.
+
+IMPORTANT: Return ONLY the Python code, nothing else. Do not include explanations, descriptions, or instructions before or after the code."""
+
+    user_prompt_text = f"""Create a {graph_type} using matplotlib for the following data:
+    {csv_data}"""
+
+    if custom_prompt.strip():
+        user_prompt_text += f"""
 
     Styling requirements:
-    - Use a modern, professional color palette (avoid default matplotlib colors)
-    - Add grid lines with subtle styling (alpha=0.3)
-    - Use clear, readable fonts (fontsize=12 for labels, 14 for title)
-    - Add proper titles and axis labels
-    - Use tight layout to prevent clipping
-    - For multiple series, use distinct colors from a cohesive palette
-    - Add legend if multiple data series are present
-    - All text on the chart should be of red color
+    {custom_prompt.strip()}"""
 
-    Return only valid Python code. Include imports. Do not use plt.show()."""
+    user_prompt_text += """
 
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    IMPORTANT REQUIREMENTS:
+    - Return only valid Python code. Include imports.
+    - DO NOT use plt.show() or plt.savefig() - the image will be captured automatically.
+    - DO NOT call plt.close() - this will be handled automatically.
+    - DO NOT use deprecated styles like 'seaborn-whitegrid', 'seaborn-darkgrid', etc.
+    - Use modern matplotlib styles: 'default', 'classic', 'Solarize_Light2', 'bmh', 'fivethirtyeight', 'ggplot', 'grayscale', 'dark_background', etc.
+    - If you need seaborn-like styling, manually set parameters instead of using seaborn styles.
+    - Example of manual grid styling: plt.grid(True, alpha=0.3, linestyle='--')"""
 
+    client = OpenAI(api_key=OPENAI_API_KEY, timeout=60.0)
+    user_content = user_prompt_text
+
+    print("🔗 Making OpenAI API request...")
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_content}
         ],
-        max_tokens=1000
+        max_tokens=4000
     )
+    print("✅ OpenAI API request completed")
 
     print(f"Response: {response}")
 
+    # Check if response was truncated due to token limit
+    finish_reason = response.choices[0].finish_reason
+    if finish_reason == 'length':
+        logger.warning("⚠️ WARNING: Response was truncated due to max_tokens limit!")
+        logger.warning("Consider increasing max_tokens or simplifying the request")
+        # Still try to use the code, but log the warning
+
     python_code = response.choices[0].message.content
-    return python_code
+
+    # Extract token usage information
+    token_usage = {
+        'prompt_tokens': 0,
+        'completion_tokens': 0,
+        'total_tokens': 0
+    }
+
+    if hasattr(response, 'usage'):
+        token_usage = {
+            'prompt_tokens': response.usage.prompt_tokens,
+            'completion_tokens': response.usage.completion_tokens,
+            'total_tokens': response.usage.total_tokens
+        }
+        logger.info(f"📊 Token usage - Prompt: {token_usage['prompt_tokens']}, "
+                   f"Completion: {token_usage['completion_tokens']}, "
+                   f"Total: {token_usage['total_tokens']}")
+
+    return python_code, token_usage
 
 
 def detect_pdf_from_url(url, file_extension):
@@ -477,7 +542,16 @@ def detect_pdf_from_url(url, file_extension):
 
 
 def add_img_base64_snippet(code):
+    import re
+
     new_imports = "import io\nimport base64\n"
+
+    # Remove any plt.show(), plt.savefig(), or plt.close() statements from the generated code
+    # This prevents conflicts with our own save logic
+    code = re.sub(r'plt\.show\(\s*\)', '', code)
+    code = re.sub(r'plt\.savefig\([^)]*\)', '', code)
+    code = re.sub(r'plt\.close\(\s*\)', '', code)
+
     code += """
 # Save plot to a BytesIO object
 img_buf = io.BytesIO()
@@ -955,16 +1029,24 @@ def execute_python_code(code):
         # Remove markdown formatting if present - handle all variations
         code = code.strip()
 
-        # Handle various markdown code block formats
-        if code.startswith("```python"):
-            code = code[9:]
-        elif code.startswith("```py"):
-            code = code[5:]
-        elif code.startswith("```"):
-            code = code[3:]
+        # Extract code from markdown code blocks (handling explanatory text before/after)
+        import re
 
-        if code.endswith("```"):
-            code = code[:-3]
+        # Try to find code between ```python and ``` markers
+        code_block_match = re.search(r'```(?:python|py)?\s*\n(.*?)```', code, re.DOTALL)
+        if code_block_match:
+            code = code_block_match.group(1).strip()
+        else:
+            # Fallback: try the old method for backwards compatibility
+            if code.startswith("```python"):
+                code = code[9:]
+            elif code.startswith("```py"):
+                code = code[5:]
+            elif code.startswith("```"):
+                code = code[3:]
+
+            if code.endswith("```"):
+                code = code[:-3]
 
         # Clean up any remaining whitespace
         code = code.strip()
@@ -973,6 +1055,8 @@ def execute_python_code(code):
         try:
             compile(code, '<string>', 'exec')
         except SyntaxError as syntax_err:
+            print(f"❌ Syntax error in generated code: {str(syntax_err)}")
+            print(f"🔍 Problematic code:\n{code}")
             return None, f"Syntax error in generated code: {str(syntax_err)}. Please try again with a different request."
 
         # Add the base64 image generation snippet
@@ -982,13 +1066,13 @@ def execute_python_code(code):
             temp_file.write(code.encode())
             temp_file_path = temp_file.name
 
-        python_executable = shutil.which("python3") or shutil.which("python")
+        # Use the same Python executable that's running this Flask app
+        python_executable = sys.executable
 
-        # TODO: remove
-        if not python_executable:
-            raise RuntimeError("Python interpreter not found")
+        print(f"🐍 Using Python executable: {python_executable}")
+
         # Execute the generated Python code
-        result = subprocess.run(["/home/sigmafy_usr/venv/bin/python3", temp_file_path], capture_output=True, text=True)
+        result = subprocess.run([python_executable, temp_file_path], capture_output=True, text=True)
         if result.returncode == 0:
             return result.stdout.strip(), None
         else:
